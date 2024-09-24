@@ -1,10 +1,30 @@
 defmodule Grafica do
+  @moduledoc """
+  Módulo para la representación de una gráfica mediante procesos.
+  Cada proceso tiene un estado con su identificador, vecinos y si ha sido visitado.
+  La gráfica se puede iniciar desde un nodo raíz y los mensajes se propagan a través de los vecinos.
+  """
 
-  # Estado inicial simplificado
+  @doc """
+  Inicializa un proceso con un estado inicial.
+
+  El estado tiene las claves:
+  - `:id`: El identificador del proceso (por defecto `-1`).
+  - `:visitado`: Un booleano que indica si el proceso ha sido visitado.
+  - `:raiz`: Un booleano que indica si el proceso es la raíz.
+
+  Luego, el proceso comienza a recibir mensajes.
+  """
   def inicia(estado_inicial \\ %{:visitado => false, :raiz => false, :id => -1}) do
     recibe_mensaje(estado_inicial)
   end
 
+  @doc """
+  Recibe y procesa mensajes indefinidamente.
+
+  Espera mensajes y los procesa de acuerdo a su tipo.
+  Después de procesar un mensaje, vuelve a esperar más mensajes.
+  """
   def recibe_mensaje(estado) do
     receive do
       mensaje ->
@@ -13,7 +33,17 @@ defmodule Grafica do
     end
   end
 
-  # Procesa los mensajes con patrones flexibles
+  @doc """
+  Procesa los mensajes recibidos según su tipo.
+
+  Los mensajes pueden ser de los siguientes tipos:
+
+  - `{:id, id}`: Asigna un identificador `id` al proceso.
+  - `{:vecinos, vecinos}`: Asigna los procesos vecinos al proceso actual.
+  - `{:mensaje, n_id}`: Mensaje de conexión, propagado desde el proceso padre (vecino).
+  - `{:inicia}`: Inicia la propagación del mensaje desde el nodo raíz.
+  - `{:ya}`: Verifica si el proceso ha sido visitado, lo que indica si la gráfica es conexa.
+  """
   def procesa_mensaje({:id, id}, estado) do
     estado = Map.put(estado, :id, id)
     {:ok, estado}
@@ -45,7 +75,12 @@ defmodule Grafica do
     {:ok, estado}
   end
 
-  # Lógica simplificada para manejar la conexión y la propagación de mensajes
+  @doc """
+  Función encargada de manejar la propagación de mensajes entre los procesos vecinos.
+
+  Si el proceso es la raíz y no ha sido visitado, envía el mensaje a todos sus vecinos.
+  Si el proceso no ha sido visitado pero recibe un mensaje de su padre, también propaga el mensaje a sus vecinos.
+  """
   def conexion(estado, n_id \\ nil) do
     %{:id => id, :vecinos => vecinos, :visitado => visitado, :raiz => raiz} = estado
 
@@ -65,7 +100,7 @@ defmodule Grafica do
   end
 end
 
-# Crear procesos y asignarles IDs
+# Creación de los procesos
 q = spawn(Grafica, :inicia, [])
 r = spawn(Grafica, :inicia, [])
 s = spawn(Grafica, :inicia, [])
@@ -77,7 +112,7 @@ x = spawn(Grafica, :inicia, [])
 y = spawn(Grafica, :inicia, [])
 z = spawn(Grafica, :inicia, [])
 
-# Asignar IDs a los procesos
+# Asignación de IDs a los procesos
 send(q, {:id, 17})
 send(r, {:id, 18})
 send(s, {:id, 19})
@@ -89,7 +124,7 @@ send(x, {:id, 24})
 send(y, {:id, 25})
 send(z, {:id, 26})
 
-# Asignar vecinos después de la creación
+# Asignación de vecinos entre los procesos
 send(q, {:vecinos, [s]})
 send(r, {:vecinos, [s]})
 send(s, {:vecinos, [q, r]})
@@ -101,8 +136,8 @@ send(x, {:vecinos, [t, v, w, y]})
 send(y, {:vecinos, [u, x, z]})
 send(z, {:vecinos, [y]})
 
-# Iniciar la propagación desde el proceso raíz
-send(s, {:inicia})
+# Inicia la propagación desde el proceso raíz
+send(v, {:inicia})
 
 # Pausa para permitir que los mensajes se propaguen
 :timer.sleep(1000)
