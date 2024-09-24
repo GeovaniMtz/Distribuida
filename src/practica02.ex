@@ -1,9 +1,7 @@
 defmodule Grafica do
-  @moduledoc """
-  Módulo que representa gráficas con un sistema de mensajes entre procesadores
-  """
 
-  def inicia(estado_inicial \\ %{:visitado => false, :raiz => false, :id => -1, :lider => nil}) do
+  # Estado inicial simplificado
+  def inicia(estado_inicial \\ %{:visitado => false, :raiz => false, :id => -1}) do
     recibe_mensaje(estado_inicial)
   end
 
@@ -12,13 +10,10 @@ defmodule Grafica do
       mensaje ->
         {:ok, nuevo_estado} = procesa_mensaje(mensaje, estado)
         recibe_mensaje(nuevo_estado)
-    after
-      5000 -> # Timeout para recibir mensajes
-        IO.puts("Proceso #{estado.id} ha excedido el tiempo de espera. Terminando.")
-        {:stop, estado}
     end
   end
 
+  # Procesa los mensajes con patrones flexibles
   def procesa_mensaje({:id, id}, estado) do
     estado = Map.put(estado, :id, id)
     {:ok, estado}
@@ -34,113 +29,107 @@ defmodule Grafica do
     {:ok, estado}
   end
 
-  def procesa_mensaje(:inicia, estado) do
+  def procesa_mensaje({:inicia}, estado) do
     estado = Map.put(estado, :raiz, true)
     estado = conexion(estado)
     {:ok, estado}
   end
 
-  def procesa_mensaje(:ya, estado) do
-    %{:id => id, :visitado => visitado, :lider => lider} = estado
+  def procesa_mensaje({:ya}, estado) do
+    %{:id => id, :visitado => visitado} = estado
     if visitado do
-      IO.puts("Soy el proceso #{id} y ya he sido visitado")
+      IO.puts("Soy el proceso #{id} y ya me visitaron")
     else
-      IO.puts("Soy el proceso #{id} y no he sido visitado, la gráfica no es conexa")
+      IO.puts("Soy el proceso #{id} y no me visitaron, la gráfica no es conexa")
     end
-
-    if lider do
-      IO.puts("El líder actual es el proceso #{lider}")
-    else
-      IO.puts("No se ha determinado un líder aún.")
-    end
-
     {:ok, estado}
   end
 
-  def procesa_mensaje({:lider, id}, estado) do
-    %{:id => mi_id, :lider => lider} = estado
-
-    # Si el id recibido es menor que el líder actual o si no hay líder
-    if lider == nil or id < lider do
-      IO.puts("Proceso #{mi_id} ha actualizado su líder a #{id}")
-      estado = Map.put(estado, :lider, id)
-
-      # Notificar a los vecinos sobre el nuevo líder
-      Enum.each(estado.vecinos, fn vecino ->
-        send(vecino, {:lider, id})
-      end)
-    end
-
-    {:ok, estado}
-  end
-
-  def procesa_mensaje(:terminar, estado) do
-    IO.puts("Proceso #{estado.id} ha terminado.")
-    {:stop, estado}
-  end
-
+  # Lógica simplificada para manejar la conexión y la propagación de mensajes
   def conexion(estado, n_id \\ nil) do
     %{:id => id, :vecinos => vecinos, :visitado => visitado, :raiz => raiz} = estado
-    cond do
-      raiz and not visitado ->
-        IO.puts("Proceso inicial (#{id})")
-        Enum.each(vecinos, fn vecino ->
-          send(vecino, {:mensaje, id})
-        end)
-        Map.put(estado, :visitado, true)
 
-      n_id != nil and not visitado ->
+    if raiz and not visitado do
+      IO.puts("Soy el proceso inicial (#{id})")
+      Enum.map(vecinos, fn vecino -> send(vecino, {:mensaje, id}) end)
+      Map.put(estado, :visitado, true)
+    else
+      if n_id != nil and not visitado do
         IO.puts("Soy el proceso #{id} y mi padre es #{n_id}")
-        Enum.each(vecinos, fn vecino ->
-          if Process.alive?(vecino) do
-            send(vecino, {:mensaje, id})
-          else
-            IO.puts("Vecino #{vecino} no está disponible.")
-          end
-        end)
+        Enum.map(vecinos, fn vecino -> send(vecino, {:mensaje, id}) end)
         Map.put(estado, :visitado, true)
-
-      true ->
+      else
         estado
+      end
     end
   end
 end
 
-# Creación de procesos para cada nodo de la gráfica
-v = spawn(Grafica, :inicia, [])
+# Crear procesos y asignarles IDs
+q = spawn(Grafica, :inicia, [])
+r = spawn(Grafica, :inicia, [])
+s = spawn(Grafica, :inicia, [])
 t = spawn(Grafica, :inicia, [])
+u = spawn(Grafica, :inicia, [])
+v = spawn(Grafica, :inicia, [])
+w = spawn(Grafica, :inicia, [])
 x = spawn(Grafica, :inicia, [])
 y = spawn(Grafica, :inicia, [])
-w = spawn(Grafica, :inicia, [])
-u = spawn(Grafica, :inicia, [])
 z = spawn(Grafica, :inicia, [])
-s = spawn(Grafica, :inicia, [])
-r = spawn(Grafica, :inicia, [])
-q = spawn(Grafica, :inicia, [])
 
-# Asignación de IDs a cada proceso
-send(v, {:id, 22})
+# Asignar IDs a los procesos
+send(q, {:id, 17})
+send(r, {:id, 18})
+send(s, {:id, 19})
 send(t, {:id, 20})
+send(u, {:id, 21})
+send(v, {:id, 22})
+send(w, {:id, 23})
 send(x, {:id, 24})
 send(y, {:id, 25})
-send(w, {:id, 23})
-send(u, {:id, 21})
 send(z, {:id, 26})
-send(s, {:id, 19})
-send(r, {:id, 18})
-send(q, {:id, 17})
 
-# Definición de los vecinos de cada proceso
-send(v, {:vecinos, [x]})
-send(t, {:vecinos, [x]})
-send(x, {:vecinos, [v, t, y, w]})
-send(y, {:vecinos, [x, z, u]})
-send(w, {:vecinos, [x]})
-send(u, {:vecinos, [y]})
-send(z, {:vecinos, [y]})
-send(s, {:vecinos, [r, q]})
-send(r, {:vecinos, [s]})
+# Asignar vecinos después de la creación
 send(q, {:vecinos, [s]})
+send(r, {:vecinos, [s]})
+send(s, {:vecinos, [q, r]})
+send(t, {:vecinos, [w, x]})
+send(u, {:vecinos, [y, z]})
+send(v, {:vecinos, [x]})
+send(w, {:vecinos, [t, x]})
+send(x, {:vecinos, [t, v, w, y]})
+send(y, {:vecinos, [u, x, z]})
+send(z, {:vecinos, [y]})
 
-# Iniciar el proceso raíz
-send(r, :inicia)  # También se puede iniciar en otros nodos, como x, y, etc.
+# Iniciar la propagación desde el proceso raíz
+send(s, {:inicia})
+
+# Pausa para permitir que los mensajes se propaguen
+:timer.sleep(1000)
+
+# Comprobación de si la gráfica es conexa
+IO.puts("----------------------------------------------")
+IO.puts("Verificando conexidad de la grafica")
+IO.puts("----------------------------------------------")
+:timer.sleep(1000)
+
+# Verificación de los procesos
+send(q, {:ya})
+:timer.sleep(1000)
+send(r, {:ya})
+:timer.sleep(1000)
+send(s, {:ya})
+:timer.sleep(1000)
+send(t, {:ya})
+:timer.sleep(1000)
+send(u, {:ya})
+:timer.sleep(1000)
+send(v, {:ya})
+:timer.sleep(1000)
+send(w, {:ya})
+:timer.sleep(1000)
+send(x, {:ya})
+:timer.sleep(1000)
+send(y, {:ya})
+:timer.sleep(1000)
+send(z, {:ya})
