@@ -1,29 +1,17 @@
 defmodule Grafica do
   @moduledoc """
-  Módulo para la representación de una gráfica mediante procesos.
-  Cada proceso tiene un estado con su identificador, vecinos y si ha sido visitado.
-  La gráfica se puede iniciar desde un nodo raíz y los mensajes se propagan a través de los vecinos.
+  Módulo para la representación de una gráfica de procesos y la elección de líder.
   """
 
   @doc """
-  Inicializa un proceso con un estado inicial.
-
-  El estado tiene las claves:
-  - `:id`: El identificador del proceso (por defecto `-1`).
-  - `:visitado`: Un booleano que indica si el proceso ha sido visitado.
-  - `:raiz`: Un booleano que indica si el proceso es la raíz.
-
-  Luego, el proceso comienza a recibir mensajes.
+  Inicializa el proceso con el estado inicial.
   """
-  def inicia(estado_inicial \\ %{:visitado => false, :raiz => false, :id => -1}) do
+  def inicia(estado_inicial \\ %{:visitado => false, :id => -1, :lider_id => nil, :vecinos => []}) do
     recibe_mensaje(estado_inicial)
   end
 
   @doc """
-  Recibe y procesa mensajes indefinidamente.
-
-  Espera mensajes y los procesa de acuerdo a su tipo.
-  Después de procesar un mensaje, vuelve a esperar más mensajes.
+  Recibe y procesa los mensajes de forma indefinida.
   """
   def recibe_mensaje(estado) do
     receive do
@@ -34,15 +22,7 @@ defmodule Grafica do
   end
 
   @doc """
-  Procesa los mensajes recibidos según su tipo.
-
-  Los mensajes pueden ser de los siguientes tipos:
-
-  - `{:id, id}`: Asigna un identificador `id` al proceso.
-  - `{:vecinos, vecinos}`: Asigna los procesos vecinos al proceso actual.
-  - `{:mensaje, n_id}`: Mensaje de conexión, propagado desde el proceso padre (vecino).
-  - `{:inicia}`: Inicia la propagación del mensaje desde el nodo raíz.
-  - `{:ya}`: Verifica si el proceso ha sido visitado, lo que indica si la gráfica es conexa.
+  Procesa los mensajes según el tipo.
   """
   def procesa_mensaje({:id, id}, estado) do
     estado = Map.put(estado, :id, id)
@@ -54,49 +34,60 @@ defmodule Grafica do
     {:ok, estado}
   end
 
-  def procesa_mensaje({:mensaje, n_id}, estado) do
-    estado = conexion(estado, n_id)
+  def procesa_mensaje({:inicia}, estado) do
+    %{:id => id} = estado
+    IO.puts("Soy el proceso #{id} y comienzo la elección.")
+    iniciar_eleccion(id, estado)  # Inicia la elección con el propio ID
     {:ok, estado}
   end
 
-  def procesa_mensaje({:inicia}, estado) do
-    estado = Map.put(estado, :raiz, true)
-    estado = conexion(estado)
-    {:ok, estado}
+  def procesa_mensaje({:eleccion, nuevo_lider_id}, estado) do
+    %{:id => id, :lider_id => lider_id_viejo, :vecinos => vecinos} = estado
+
+    # Actualiza el líder si el nuevo ID es menor
+    cond do
+      lider_id_viejo == nil or nuevo_lider_id < lider_id_viejo ->
+        IO.puts("Soy el proceso #{id} y acepto a #{nuevo_lider_id} como nuevo líder.")
+        estado = Map.put(estado, :lider_id, nuevo_lider_id)
+
+        # Propagar el nuevo ID de líder a los vecinos
+        Enum.each(vecinos, fn vecino ->
+          send(vecino, {:eleccion, nuevo_lider_id})
+        end)
+        {:ok, estado}
+
+      true ->
+        # Si ya tiene un líder menor o igual, no hace nada
+        {:ok, estado}
+    end
   end
 
   def procesa_mensaje({:ya}, estado) do
-    %{:id => id, :visitado => visitado} = estado
+    %{:id => id, :visitado => visitado, :lider_id => lider_id} = estado
     if visitado do
-      IO.puts("Soy el proceso #{id} y ya me visitaron")
+      IO.puts("Proceso #{id}: ya he sido visitado.")
     else
-      IO.puts("Soy el proceso #{id} y no me visitaron, la gráfica no es conexa")
+      IO.puts("Proceso #{id}: no he sido visitado. La gráfica no es conexa.")
     end
+
+    if lider_id do
+      IO.puts("Proceso #{id}: el líder actual es #{lider_id}.")
+    else
+      IO.puts("Proceso #{id}: aún no se ha determinado un líder.")
+    end
+
     {:ok, estado}
   end
 
   @doc """
-  Función encargada de manejar la propagación de mensajes entre los procesos vecinos.
-
-  Si el proceso es la raíz y no ha sido visitado, envía el mensaje a todos sus vecinos.
-  Si el proceso no ha sido visitado pero recibe un mensaje de su padre, también propaga el mensaje a sus vecinos.
+  Inicia el proceso de elección enviando un mensaje con su propio ID a los vecinos.
   """
-  def conexion(estado, n_id \\ nil) do
-    %{:id => id, :vecinos => vecinos, :visitado => visitado, :raiz => raiz} = estado
-
-    if raiz and not visitado do
-      IO.puts("Soy el proceso inicial (#{id})")
-      Enum.map(vecinos, fn vecino -> send(vecino, {:mensaje, id}) end)
-      Map.put(estado, :visitado, true)
-    else
-      if n_id != nil and not visitado do
-        IO.puts("Soy el proceso #{id} y mi padre es #{n_id}")
-        Enum.map(vecinos, fn vecino -> send(vecino, {:mensaje, id}) end)
-        Map.put(estado, :visitado, true)
-      else
-        estado
-      end
-    end
+  def iniciar_eleccion(lider_id, estado) do
+    %{:vecinos => vecinos} = estado
+    Enum.each(vecinos, fn vecino ->
+      send(vecino, {:eleccion, lider_id})
+    end)
+    {:ok, estado}
   end
 end
 
@@ -136,15 +127,15 @@ send(x, {:vecinos, [t, v, w, y]})
 send(y, {:vecinos, [u, x, z]})
 send(z, {:vecinos, [y]})
 
-# Inicia la propagación desde el proceso raíz
-send(v, {:inicia})
+# Inicia la elección desde el proceso 'v'
+send(q, {:inicia})
 
 # Pausa para permitir que los mensajes se propaguen
 :timer.sleep(1000)
 
-# Comprobación de si la gráfica es conexa
+# Verificación de la conectividad de la gráfica y estado de los líderes
 IO.puts("----------------------------------------------")
-IO.puts("Verificando conexidad de la grafica")
+IO.puts("Verificando conexidad de la gráfica y elección de líder")
 IO.puts("----------------------------------------------")
 :timer.sleep(1000)
 
