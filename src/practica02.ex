@@ -1,10 +1,22 @@
 defmodule Grafica do
   @moduledoc """
   Módulo para la representación de una gráfica de procesos y la elección de líder.
+
+  Cada proceso tiene un estado que incluye:
+    - `:id`: Identificador único del proceso.
+    - `:lider_id`: Identificador del líder actual.
+    - `:vecinos`: Lista de vecinos a los que puede enviar mensajes.
+    - `:visitado`: Indica si el proceso ha sido visitado en la verificación de la conectividad.
   """
 
   @doc """
   Inicializa el proceso con el estado inicial.
+
+  ## Parámetros
+  - `estado_inicial`: Un mapa con los valores por defecto del estado del proceso.
+
+  Por defecto, el estado incluye que el proceso no ha sido visitado, no tiene un líder
+  asignado, y su lista de vecinos está vacía.
   """
   def inicia(estado_inicial \\ %{:visitado => false, :id => -1, :lider_id => nil, :vecinos => []}) do
     recibe_mensaje(estado_inicial)
@@ -12,6 +24,9 @@ defmodule Grafica do
 
   @doc """
   Recibe y procesa los mensajes de forma indefinida.
+
+  La función `receive` bloquea el proceso hasta que llega un mensaje.
+  Dependiendo del tipo de mensaje, este se procesa y actualiza el estado del proceso.
   """
   def recibe_mensaje(estado) do
     receive do
@@ -22,7 +37,16 @@ defmodule Grafica do
   end
 
   @doc """
-  Procesa los mensajes según el tipo.
+  Procesa los mensajes recibidos por el proceso.
+
+  Dependiendo del contenido del mensaje, actualiza el estado del proceso.
+
+  ## Tipos de mensajes:
+    - `{:id, id}`: Asigna un identificador único al proceso.
+    - `{:vecinos, vecinos}`: Asigna la lista de vecinos del proceso.
+    - `{:inicia}`: Inicia el proceso de elección de líder.
+    - `{:eleccion, lider_id}`: Propaga el nuevo líder en la gráfica.
+    - `{:ya}`: Verifica si el proceso ha sido visitado y muestra el estado actual.
   """
   def procesa_mensaje({:id, id}, estado) do
     estado = Map.put(estado, :id, id)
@@ -37,39 +61,42 @@ defmodule Grafica do
   def procesa_mensaje({:inicia}, estado) do
     %{:id => id} = estado
     IO.puts("Soy el proceso #{id} y comienzo la elección.")
-    iniciar_eleccion(id, estado)  # Inicia la elección con el propio ID
+    iniciar_eleccion(id, estado)  # Inicia la elección con el propio ID como líder
     {:ok, estado}
   end
 
   def procesa_mensaje({:eleccion, nuevo_lider_id}, estado) do
     %{:id => id, :lider_id => lider_id_viejo, :vecinos => vecinos} = estado
 
-    # Actualiza el líder si el nuevo ID es menor
     cond do
+      # Si no tiene líder o el nuevo líder es menor, lo actualiza
       lider_id_viejo == nil or nuevo_lider_id < lider_id_viejo ->
         IO.puts("Soy el proceso #{id} y acepto a #{nuevo_lider_id} como nuevo líder.")
         estado = Map.put(estado, :lider_id, nuevo_lider_id)
 
-        # Propagar el nuevo ID de líder a los vecinos
+        # Propaga el nuevo líder a los vecinos
         Enum.each(vecinos, fn vecino ->
           send(vecino, {:eleccion, nuevo_lider_id})
         end)
         {:ok, estado}
 
       true ->
-        # Si ya tiene un líder menor o igual, no hace nada
+        # Si ya tiene un líder igual o menor, no hace nada
         {:ok, estado}
     end
   end
 
   def procesa_mensaje({:ya}, estado) do
     %{:id => id, :visitado => visitado, :lider_id => lider_id} = estado
+
+    # Verifica si el proceso ha sido visitado en la verificación de la conectividad
     if visitado do
       IO.puts("Proceso #{id}: ya he sido visitado.")
     else
       IO.puts("Proceso #{id}: no he sido visitado. La gráfica no es conexa.")
     end
 
+    # Muestra el líder actual del proceso
     if lider_id do
       IO.puts("Proceso #{id}: el líder actual es #{lider_id}.")
     else
@@ -81,6 +108,12 @@ defmodule Grafica do
 
   @doc """
   Inicia el proceso de elección enviando un mensaje con su propio ID a los vecinos.
+
+  ## Parámetros
+    - `lider_id`: El ID del proceso que inicia la elección.
+    - `estado`: El estado actual del proceso.
+
+  Propaga el ID a sus vecinos, quienes continuarán propagando el mensaje.
   """
   def iniciar_eleccion(lider_id, estado) do
     %{:vecinos => vecinos} = estado
@@ -127,7 +160,7 @@ send(x, {:vecinos, [t, v, w, y]})
 send(y, {:vecinos, [u, x, z]})
 send(z, {:vecinos, [y]})
 
-# Inicia la elección desde el proceso 'v'
+# Inicia la elección desde el proceso 'q'
 send(q, {:inicia})
 
 # Pausa para permitir que los mensajes se propaguen
